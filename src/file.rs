@@ -1,33 +1,23 @@
 use std::{fs, io};
 
-#[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
-enum State {
-    Saved,
-    #[default]
-    Unsaved,
-}
-
-#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct File {
     path: Option<String>,
     contents: String,
-    //todo convert to boolean
-    state: State,
+    saved: bool,
 }
 
 impl File {
     pub fn is_saved_or_not_changed(&self) -> bool {
         if self.path.is_some() {
-            matches!(self.state, State::Saved)
+            self.saved
         } else {
             self.contents.is_empty()
         }
     }
 
     pub fn is_saved(&self) -> bool {
-        matches!(self.state, State::Saved)
+        self.saved
     }
 
     pub fn is_changed(&self) -> bool {
@@ -47,7 +37,7 @@ impl File {
 
     pub fn mark_as_unsaved(&mut self) {
         if self.is_saved() {
-            self.state = State::Unsaved;
+            self.saved = false;
         }
     }
 
@@ -62,7 +52,7 @@ impl File {
     pub fn save(&mut self, path: &str) -> io::Result<()> {
         println!("{:?}", self.contents);
         fs::write(path, &self.contents)?;
-        self.state = State::Saved;
+        self.saved = true;
         Ok(())
     }
 
@@ -74,7 +64,7 @@ impl File {
         Ok(Self {
             contents,
             path: Some(path),
-            state: State::Saved,
+            saved: true,
         })
     }
 }

@@ -737,16 +737,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-files"
-version = "0.1.0"
-dependencies = [
- "dirs-next",
- "eframe",
- "rfd",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "egui-winit"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2113,6 +2103,16 @@ dependencies = [
  "redox_syscall 0.3.5",
  "rustix",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "text-editor"
+version = "0.1.0"
+dependencies = [
+ "dirs-next",
+ "eframe",
+ "rfd",
+ "tracing-subscriber",
 ]
 
 [[package]]
