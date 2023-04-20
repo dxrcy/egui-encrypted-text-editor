@@ -18,12 +18,27 @@ pub struct File {
 }
 
 impl File {
-    pub fn is_saved(&self) -> bool {
+    pub fn is_saved_or_not_changed(&self) -> bool {
         if self.path.is_some() {
             matches!(self.state, State::Saved)
         } else {
             self.contents.is_empty()
         }
+    }
+
+    pub fn is_saved(&self) -> bool {
+        matches!(self.state, State::Saved)
+    }
+
+    pub fn is_changed(&self) -> bool {
+        if self.is_saved() {
+            return false;
+        }
+        self.path().is_some() || !self.contents().is_empty()
+    }
+
+    pub fn contents(&self) -> &String {
+        &self.contents
     }
 
     pub fn contents_mut(&mut self) -> &mut String {
@@ -59,7 +74,7 @@ impl File {
         Ok(Self {
             contents,
             path: Some(path),
-            state: State::default(),
+            state: State::Saved,
         })
     }
 }

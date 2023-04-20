@@ -20,27 +20,42 @@ fn main() -> Result<(), eframe::Error> {
     )
 }
 
-#[allow(dead_code)]
+enum CloseAction {
+    New,
+    Open,
+}
+
 #[derive(Default)]
 struct App {
-    error: Option<&'static str>,
-
     file: File,
 
-    close_attempt: Attempt,
+    close_attempt: Attempt<CloseAction>,
+    // error: Option<&'static str>,
 }
 
 impl App {
-    pub fn attempt_file_close(&mut self) -> bool {
-        println!("Attempt close");
+    pub fn attempt_file_close(&mut self, action: CloseAction) -> bool {
+        println!("? Close");
 
-        let is_able = self.close_attempt.allow_if(self.file.is_saved());
-        if is_able {
+        if self
+            .close_attempt
+            .allow_if(self.file.is_saved_or_not_changed(), action)
+        {
             println!("Close");
 
-            self.file = File::default();
+            true
+        } else {
+            false
         }
-        is_able
+    }
+
+    pub fn attempt_file_close_action(&mut self) {
+        if let Some(close_attempt) = &mut self.close_attempt.action() {
+            match close_attempt {
+                CloseAction::New => self.file_new(),
+                CloseAction::Open => self.file_open(),
+            }
+        }
     }
 
     fn file_save(&mut self) {
@@ -69,7 +84,7 @@ impl App {
     fn file_open(&mut self) {
         println!("Open");
 
-        if self.attempt_file_close() {
+        if self.attempt_file_close(CloseAction::Open) {
             if let Some(path) = file_dialog()
                 .pick_file()
                 .map(|path_buf| path_buf.display().to_string())
@@ -80,9 +95,11 @@ impl App {
     }
 
     fn file_new(&mut self) {
-        println!("New file");
+        println!("? New file");
 
-        if self.attempt_file_close() {
+        if self.attempt_file_close(CloseAction::New) {
+            println!("New file");
+
             self.file = File::default();
         }
     }
@@ -99,7 +116,11 @@ impl eframe::App for App {
                 ui.label(if self.file.is_saved() {
                     "Saved"
                 } else {
-                    "UNSAVED"
+                    if self.file.is_changed() {
+                        "UNSAVED"
+                    } else {
+                        ""
+                    }
                 });
             });
 
@@ -152,14 +173,14 @@ impl eframe::App for App {
                 ui.horizontal(|ui| {
                     if ui.button("Don't save").clicked() {
                         self.close_attempt.force();
-                        self.attempt_file_close();
+                        self.attempt_file_close_action();
                     }
                     if ui.button("Cancel").clicked() {
                         self.close_attempt.give_up();
                     }
                     if ui.button("Save").clicked() {
                         self.file_save();
-                        self.attempt_file_close();
+                        self.attempt_file_close_action();
                     }
                 });
             });
@@ -174,33 +195,32 @@ fn dialog_window(title: &str) -> egui::Window {
         .anchor(Align2::CENTER_CENTER, (0.0, 0.0))
 }
 
-#[allow(dead_code)]
-/// Preview hovering files:
-fn preview_files_being_dropped(ctx: &egui::Context) {
-    use egui::*;
+// /// Preview hovering files:
+// fn preview_files_being_dropped(ctx: &egui::Context) {
+//     use egui::*;
 
-    if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
-        let text = ctx.input(|input_state| {
-            let files = &input_state.raw.hovered_files;
+//     if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
+//         let text = ctx.input(|input_state| {
+//             let files = &input_state.raw.hovered_files;
 
-            if files.len() > 1 {
-                "Cannot open more than 1 file"
-            } else {
-                "Drag and drop file to open"
-            }
-        });
+//             if files.len() > 1 {
+//                 "Cannot open more than 1 file"
+//             } else {
+//                 "Drag and drop file to open"
+//             }
+//         });
 
-        let painter =
-            ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
+//         let painter =
+//             ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
 
-        let screen_rect = ctx.screen_rect();
-        painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(192));
-        painter.text(
-            screen_rect.center(),
-            Align2::CENTER_CENTER,
-            text,
-            TextStyle::Heading.resolve(&ctx.style()),
-            Color32::WHITE,
-        );
-    }
-}
+//         let screen_rect = ctx.screen_rect();
+//         painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(192));
+//         painter.text(
+//             screen_rect.center(),
+//             Align2::CENTER_CENTER,
+//             text,
+//             TextStyle::Heading.resolve(&ctx.style()),
+//             Color32::WHITE,
+//         );
+//     }
+// }
