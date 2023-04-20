@@ -5,12 +5,10 @@ mod app;
 mod attempt;
 mod file;
 
+use rfd::FileDialog;
 use std::path::PathBuf;
 
-use rfd::FileDialog;
-
 pub use crate::app::App;
-
 use crate::{attempt::Attempt, file::File};
 
 pub fn get_start_dir() -> Option<PathBuf> {
@@ -24,7 +22,7 @@ pub fn get_start_dir() -> Option<PathBuf> {
 }
 
 pub fn file_dialog() -> FileDialog {
-    let dialog = rfd::FileDialog::new();
+    let dialog = FileDialog::new();
 
     if let Some(dir) = get_start_dir() {
         dialog.set_directory(dir)

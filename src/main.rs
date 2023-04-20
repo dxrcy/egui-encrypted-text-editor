@@ -3,7 +3,6 @@
 use eframe::egui;
 use text_editor::App;
 
-
 fn main() -> Result<(), eframe::Error> {
     tracing_subscriber::fmt::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
@@ -16,6 +15,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Text file editor",
         options,
-        Box::new(|_cc| Box::new(App::default())),
+        Box::new(|_cc| Box::<App>::default()),
     )
 }

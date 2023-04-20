@@ -6,36 +6,27 @@ use crate::{file_dialog, Attempt, File};
 #[derive(Default)]
 pub struct App {
     file: File,
-
     close_attempt: Attempt<CloseAction>,
 }
 
 enum CloseAction {
-    New,
-    Open,
+    NewFile,
+    OpenFile,
 }
 
 impl App {
     fn attempt_file_close(&mut self, action: CloseAction) -> bool {
         println!("? Close");
 
-        if self
-            .close_attempt
+        self.close_attempt
             .allow_if(self.file.is_saved_or_not_changed(), action)
-        {
-            println!("Close");
-
-            true
-        } else {
-            false
-        }
     }
 
     fn attempt_file_close_action(&mut self) {
         if let Some(close_attempt) = &mut self.close_attempt.action() {
             match close_attempt {
-                CloseAction::New => self.file_new(),
-                CloseAction::Open => self.file_open(),
+                CloseAction::NewFile => self.file_new(),
+                CloseAction::OpenFile => self.file_open(),
             }
         }
     }
@@ -43,9 +34,9 @@ impl App {
     fn file_save(&mut self) {
         println!("Save");
 
-        // ? Remove clone
+        // todo Remove clone ?
         if let Some(path) = self.file.clone().path() {
-            self.file.save(&path).expect("Save file");
+            self.file.save(path).expect("Save file");
         } else {
             self.file_save_as();
         }
@@ -66,7 +57,7 @@ impl App {
     fn file_open(&mut self) {
         println!("Open");
 
-        if self.attempt_file_close(CloseAction::Open) {
+        if self.attempt_file_close(CloseAction::OpenFile) {
             if let Some(path) = file_dialog()
                 .pick_file()
                 .map(|path_buf| path_buf.display().to_string())
@@ -79,7 +70,7 @@ impl App {
     fn file_new(&mut self) {
         println!("? New file");
 
-        if self.attempt_file_close(CloseAction::New) {
+        if self.attempt_file_close(CloseAction::NewFile) {
             println!("New file");
 
             self.file = File::default();
@@ -108,12 +99,10 @@ impl eframe::App for App {
 
                 ui.label(if self.file.is_saved() {
                     "Saved"
+                } else if self.file.is_changed() {
+                    "UNSAVED"
                 } else {
-                    if self.file.is_changed() {
-                        "UNSAVED"
-                    } else {
-                        ""
-                    }
+                    ""
                 });
             });
 
