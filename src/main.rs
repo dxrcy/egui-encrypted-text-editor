@@ -1,7 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use eframe::{egui, emath::Align2, epaint::Color32};
-use egui_files::{dialog_open_file, dialog_save_file, Attempt, CurrentFile, File, State};
+use eframe::egui;
+use egui::emath::Align2;
+use egui_files::{file_dialog, Attempt, File};
 
 fn main() -> Result<(), eframe::Error> {
     tracing_subscriber::fmt::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -19,85 +20,70 @@ fn main() -> Result<(), eframe::Error> {
     )
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 struct App {
-    // path: Option<String>,
     error: Option<&'static str>,
 
-    file: CurrentFile,
+    file: File,
 
-    // saved: bool,
-    close_file_attempt: Attempt,
+    close_attempt: Attempt,
 }
 
 impl App {
-    pub fn attempt_close_file(&mut self) -> bool {
-        let is_able = self.close_file_attempt.allow_if(self.file.is_saved());
-        if is_able {
-            println!("Close file");
+    pub fn attempt_file_close(&mut self) -> bool {
+        println!("Attempt close");
 
-            self.file = CurrentFile::default();
+        let is_able = self.close_attempt.allow_if(self.file.is_saved());
+        if is_able {
+            println!("Close");
+
+            self.file = File::default();
         }
         is_able
     }
 
-    pub fn file_open(&mut self, path: &str) {
-        if self.attempt_close_file() {
-            let file = File::open(path);
+    fn file_save(&mut self) {
+        println!("Save");
 
-            *self = CurrentFile::Existing {
-                path: path.to_string(),
-                file,
-                state: State::Saved,
+        // ? Remove clone
+        if let Some(path) = self.file.clone().path() {
+            self.file.save(&path).expect("Save file");
+        } else {
+            self.file_save_as();
+        }
+    }
+
+    fn file_save_as(&mut self) {
+        println!("Save as");
+
+        if let Some(path) = file_dialog()
+            .save_file()
+            .map(|path_buf| path_buf.display().to_string())
+        {
+            self.file.set_path(&path);
+            self.file.save(&path).expect("Save file");
+        };
+    }
+
+    fn file_open(&mut self) {
+        println!("Open");
+
+        if self.attempt_file_close() {
+            if let Some(path) = file_dialog()
+                .pick_file()
+                .map(|path_buf| path_buf.display().to_string())
+            {
+                self.file = File::open_path(path).expect("Open file");
             };
         }
     }
 
-    pub fn file_close(&mut self) {
-        if self.attempt_close_file() {
-            self.file = CurrentFile::new_unregistered();
-        }
-    }
+    fn file_new(&mut self) {
+        println!("New file");
 
-    pub fn file_save(&mut self) {
-        println!("SAVE FILE");
-
-        match &self.file {
-            CurrentFile::Existing { file, path, state } => {
-                match state {
-                    State::Saved => {
-                        // do nothing
-                    }
-
-                    State::Unsaved => {
-                        file.save(path);
-                    }
-                }
-            }
-
-            CurrentFile::Unregistered { .. } => self.file_save_as(),
-        }
-    }
-
-    pub fn file_save_as(&mut self) {
-        println!("SAVE AS file");
-
-        if let Some(new_path) = dialog_save_file() {
-            match &mut self.file {
-                CurrentFile::Existing { path, .. } => {
-                    *path = new_path;
-                }
-
-                CurrentFile::Unregistered { file } => {
-                    self.file = CurrentFile::Existing {
-                        path: new_path,
-                        file: file.clone(),
-                        state: State::Unsaved,
-                    }
-                }
-            }
-
-            self.file_save();
+        if self.attempt_file_close() {
+            self.file = File::default();
         }
     }
 }
@@ -105,29 +91,19 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("Drag-and-drop files onto the window!");
-
-            ui.label(if self.file.is_saved() {
-                "Saved"
-            } else {
-                "UNSAVED"
-            });
-
-            // if ui.button("saved?").clicked() {
-            //     self.saved ^= true;
-            // }
+            ui.heading("Text file editor");
 
             ui.horizontal(|ui| {
-                if ui.button("Open").clicked() {
-                    if let Some(path) = dialog_open_file() {
-                        self.file_open(&path);
-                    }
-                }
+                ui.monospace(self.file.path().unwrap_or(&"Unknown file".to_string()));
 
-                if ui.button("New").clicked() {
-                    self.file_close();
-                }
+                ui.label(if self.file.is_saved() {
+                    "Saved"
+                } else {
+                    "UNSAVED"
+                });
+            });
 
+            ui.horizontal(|ui| {
                 if ui.button("Save").clicked() {
                     self.file_save();
                 }
@@ -135,60 +111,55 @@ impl eframe::App for App {
                 if ui.button("Save As").clicked() {
                     self.file_save_as();
                 }
+
+                if ui.button("Open").clicked() {
+                    self.file_open();
+                }
+
+                if ui.button("New").clicked() {
+                    self.file_new();
+                }
             });
-
-            if let Some(path) = self.file.path() {
-                ui.horizontal(|ui| {
-                    ui.label("Current Filepath:");
-                    ui.monospace(path);
-                });
-            }
-
-            if let Some(error) = self.error {
-                ui.colored_label(Color32::RED, error);
-            }
-
-            ui.separator();
 
             let edit_contents = ui.text_edit_multiline(self.file.contents_mut());
 
             if edit_contents.changed() {
-                self.file.set_unsaved();
+                self.file.mark_as_unsaved();
             }
         });
 
-        preview_files_being_dropped(ctx);
+        // preview_files_being_dropped(ctx);
 
-        // Collect dropped files:
-        ctx.input(|input_state| {
-            let files = &input_state.raw.dropped_files;
+        // // Collect dropped files:
+        // ctx.input(|input_state| {
+        //     let files = &input_state.raw.dropped_files;
 
-            if files.len() == 1 {
-                if let Some(file) = files.first() {
-                    if let Some(path) = &file.path {
-                        self.file_open(&path.display().to_string())
-                    } else if !file.name.is_empty() {
-                        self.file_open(&file.name)
-                    } else {
-                        self.error = Some("Unable to open file");
-                    };
-                }
-            }
-        });
+        //     if files.len() == 1 {
+        //         if let Some(file) = files.first() {
+        //             if let Some(path) = &file.path {
+        //                 self.file_open(&path.display().to_string())
+        //             } else if !file.name.is_empty() {
+        //                 self.file_open(&file.name)
+        //             } else {
+        //                 self.error = Some("Unable to open file");
+        //             };
+        //         }
+        //     }
+        // });
 
-        if self.close_file_attempt.is_active() {
+        if self.close_attempt.active() {
             dialog_window("Close file without saving?").show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("Don't save").clicked() {
-                        self.close_file_attempt.force();
-                        self.attempt_close_file();
+                        self.close_attempt.force();
+                        self.attempt_file_close();
                     }
                     if ui.button("Cancel").clicked() {
-                        self.close_file_attempt.give_up();
+                        self.close_attempt.give_up();
                     }
                     if ui.button("Save").clicked() {
                         self.file_save();
-                        self.attempt_close_file();
+                        self.attempt_file_close();
                     }
                 });
             });
@@ -203,6 +174,7 @@ fn dialog_window(title: &str) -> egui::Window {
         .anchor(Align2::CENTER_CENTER, (0.0, 0.0))
 }
 
+#[allow(dead_code)]
 /// Preview hovering files:
 fn preview_files_being_dropped(ctx: &egui::Context) {
     use egui::*;

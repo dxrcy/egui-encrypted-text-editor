@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 eframe = "0.21.3"
 tracing-subscriber = "0.3.16"
-rfd = "0.11"
+rfd = "0.11.3"
 dirs-next = "2.0.0"

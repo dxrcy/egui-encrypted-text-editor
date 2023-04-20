@@ -22,7 +22,7 @@ impl Attempt {
         }
     }
 
-    pub fn is_active(&self) -> bool {
+    pub fn active(&self) -> bool {
         self.active
     }
 
@@ -35,7 +35,11 @@ impl Attempt {
     }
 }
 
-fn get_start_dir() -> Option<PathBuf> {
+#[allow(unreachable_code)]
+pub fn get_start_dir() -> Option<PathBuf> {
+    // @ remove this
+    return Some(PathBuf::from("/media/darcy/Windows-SSD/Users/darcy/Documents/code/egui-files"));
+
     if let Some(dir) = dirs_next::document_dir() {
         return Some(dir);
     }
@@ -45,7 +49,7 @@ fn get_start_dir() -> Option<PathBuf> {
     None
 }
 
-fn file_dialog() -> FileDialog {
+pub fn file_dialog() -> FileDialog {
     let dialog = rfd::FileDialog::new();
 
     if let Some(dir) = get_start_dir() {
@@ -55,14 +59,14 @@ fn file_dialog() -> FileDialog {
     }
 }
 
-pub fn dialog_open_file() -> Option<String> {
-    file_dialog()
-        .pick_file()
-        .map(|path_buf| path_buf.display().to_string())
-}
+// pub fn dialog_open_file() -> Option<String> {
+//     file_dialog()
+//         .pick_file()
+//         .map(|path_buf| path_buf.display().to_string())
+// }
 
-pub fn dialog_save_file() -> Option<String> {
-    file_dialog()
-        .pick_file()
-        .map(|path_buf| path_buf.display().to_string())
-}
+// pub fn dialog_save_file() -> Option<String> {
+//     file_dialog()
+//         .pick_file()
+//         .map(|path_buf| path_buf.display().to_string())
+// }

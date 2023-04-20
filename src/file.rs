@@ -1,172 +1,65 @@
-use std::fs;
+use std::{fs, io};
 
-// use crate::dialog_save_file;
-
-use crate::CurrentFile::*;
-use crate::State::*;
-
-pub enum CurrentFile {
-    Existing {
-        file: File,
-        path: String,
-        state: State,
-    },
-
-    Unregistered {
-        file: File,
-    },
-}
-
-pub enum State {
+#[allow(dead_code)]
+#[derive(Clone, Copy, Default)]
+enum State {
     Saved,
+    #[default]
     Unsaved,
 }
 
-impl State {
-    pub fn is_saved(&self) -> bool {
-        matches!(self, Saved)
-    }
-}
-
-type Contents = String;
-
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct File {
-    contents: Contents,
+    path: Option<String>,
+    contents: String,
+    //todo convert to boolean
+    state: State,
 }
 
 impl File {
-    pub fn new() -> Self {
-        Self {
-            contents: String::new(),
-        }
-    }
-
-    pub fn save(&self, path: &str) {
-        fs::write(path, &self.contents).expect("Write file");
-    }
-
-    pub fn open(path: &str) -> Self {
-        let contents = fs::read_to_string(path).expect("Read file");
-
-        Self { contents }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.contents.is_empty()
-    }
-}
-
-impl Default for CurrentFile {
-    fn default() -> Self {
-        Self::new_unregistered()
-    }
-}
-
-impl CurrentFile {
-    pub fn new_unregistered() -> Self {
-        Unregistered { file: File::new() }
-    }
-
     pub fn is_saved(&self) -> bool {
-        match self {
-            Existing { state, .. } => state.is_saved(),
-            Unregistered { file } => file.is_empty(),
-        }
-    }
-
-    pub fn path(&self) -> Option<&str> {
-        if let Existing { path, .. } = self {
-            Some(path)
+        if self.path.is_some() {
+            matches!(self.state, State::Saved)
         } else {
-            None
+            self.contents.is_empty()
         }
     }
 
-    fn file(&self) -> &File {
-        match self {
-            Existing { file, .. } => file,
-            Unregistered { file } => file,
+    pub fn contents_mut(&mut self) -> &mut String {
+        &mut self.contents
+    }
+
+    pub fn mark_as_unsaved(&mut self) {
+        if self.is_saved() {
+            self.state = State::Unsaved;
         }
     }
 
-    fn file_mut(&mut self) -> &mut File {
-        match self {
-            Existing { file, .. } => file,
-            Unregistered { file } => file,
-        }
+    pub fn path(&self) -> Option<&String> {
+        self.path.as_ref()
     }
 
-    pub fn contents(&self) -> &str {
-        &self.file().contents
+    pub fn set_path(&mut self, path: impl Into<String>) {
+        self.path = Some(path.into())
     }
 
-    pub fn contents_mut(&mut self) -> &mut Contents {
-        &mut self.file_mut().contents
+    pub fn save(&mut self, path: &str) -> io::Result<()> {
+        println!("{:?}", self.contents);
+        fs::write(path, &self.contents)?;
+        self.state = State::Saved;
+        Ok(())
     }
 
-    pub fn set_unsaved(&mut self) {
-        if let Existing { state, .. } = self {
-            *state = Unsaved;
-        }
+    pub fn open_path(path: impl Into<String>) -> io::Result<Self> {
+        let path = path.into();
+
+        let contents = fs::read_to_string(&path)?;
+
+        Ok(Self {
+            contents,
+            path: Some(path),
+            state: State::default(),
+        })
     }
-
-    pub fn set_saved(&mut self) {
-        if let Existing { state, .. } = self {
-            *state = Saved;
-        }
-    }
-
-    // pub fn save(&mut self) {
-    //     match self {
-    //         Existing { file, path, state } => {
-    //             match state {
-    //                 Saved => {
-    //                     // do nothing
-    //                 }
-
-    //                 Unsaved => {
-    //                     file.save(path);
-    //                 }
-    //             }
-    //         }
-
-    //         Unregistered { .. } => self.save_as(),
-    //     }
-    // }
-
-    // pub fn save_as(&mut self) {
-    //     if let Some(new_path) = dialog_save_file() {
-    //         match self {
-    //             Existing { path, .. } => {
-    //                 *path = new_path;
-    //             }
-                
-    //             Unregistered { file } => {
-    //                 *self = Existing {
-    //                     path: new_path,
-    //                     file: file.clone(),
-    //                     state: Unsaved,
-    //                 }
-    //             }
-    //         }
-            
-    //         self.save();
-    //     }
-    // }
-
-    // pub fn close(&mut self) {
-    //     *self = Self::new_unregistered();
-    // }
-
-    // pub fn open(&mut self, path: &str) {
-    //     let file = File::open(path);
-
-    //     *self = Existing {
-    //         path: path.to_string(),
-    //         file,
-    //         state: Saved,
-    //     };
-    // }
 }
