@@ -3,6 +3,7 @@
 use eframe::egui;
 use text_editor::App;
 
+// Start egui/eframe app 
 fn main() -> Result<(), eframe::Error> {
     tracing_subscriber::fmt::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 

@@ -19,7 +19,7 @@ impl App {
         println!("? Close");
 
         self.close_attempt
-            .allow_if(self.file.is_saved_or_not_changed(), action)
+            .allow_if(!self.file.is_changed(), action)
     }
 
     fn attempt_file_close_action(&mut self) {
@@ -134,7 +134,7 @@ impl eframe::App for App {
             }
         });
 
-        if self.close_attempt.active() {
+        if self.close_attempt.is_attempting() {
             egui::Window::new("Close file without saving?")
                 .collapsible(false)
                 .resizable(false)
@@ -146,7 +146,7 @@ impl eframe::App for App {
                             self.attempt_file_close_action();
                         }
                         if ui.button("Cancel").clicked() {
-                            self.close_attempt.give_up();
+                            self.close_attempt.stop_attempt();
                         }
                         if ui.button("Save").clicked() {
                             self.file_save();

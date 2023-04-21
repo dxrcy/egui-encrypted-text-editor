@@ -1,4 +1,4 @@
-/// Check keyboard input on UI
+/// Check keyboard input on egui UI
 macro_rules! keys {
     ( $ui: ident : $key: ident ) => {
         $ui.input_mut(|i| i.consume_key(::eframe::egui::Modifiers::NONE, ::eframe::egui::Key::$key))
