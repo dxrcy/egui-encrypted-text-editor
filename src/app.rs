@@ -48,7 +48,7 @@ impl App {
 
         // todo Remove clone ?
         if let Some(path) = self.file.clone().path() {
-            self.file.save(path).expect("Save file");
+            self.file.save_to_path(path).expect("Save file");
         } else {
             self.file_save_as();
         }
@@ -65,7 +65,7 @@ impl App {
             .map(|path_buf| path_buf.display().to_string())
         {
             self.file.set_path(&path);
-            self.file.save(&path).expect("Save file");
+            self.file.save_to_path(&path).expect("Save file");
         };
     }
 

@@ -67,7 +67,7 @@ impl File {
     /// Save file to given path
     ///
     /// Sets save state to saved
-    pub fn save(&mut self, path: &str) -> io::Result<()> {
+    pub fn save_to_path(&mut self, path: &str) -> io::Result<()> {
         println!("{:?}", self.contents);
 
         fs::write(path, &self.contents)?;
