@@ -1,15 +1,47 @@
+// use std::thread;
+
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
+
 use eframe::egui;
 use egui::emath::Align2;
 
-use crate::{file_dialog, Attempt, File};
+use crate::{
+    file_dialog,
+    sync::{Channel, Message},
+    Attempt, File,
+};
 
 /// Main app state
-#[derive(Default)]
+// #[derive(Default)]
 pub struct App {
+    channel: Channel,
+
     /// Current file opened
     file: File,
+
+    /// Whether file is currently writing
+    concurrent_write: Arc<Mutex<bool>>,
+
     /// Attempt to close file (See `Attempt`)
     file_close: Attempt<CloseAction>,
+}
+
+// @ debug
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            channel: Default::default(),
+
+            file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
+
+            concurrent_write: Default::default(),
+
+            file_close: Default::default(),
+        }
+    }
 }
 
 /// Actions to allow after close attempt passes
@@ -43,21 +75,22 @@ impl App {
     /// Save file
     ///
     /// If file is unregistered, runs `self.save_as()`
-    fn file_save(&mut self) {
+    fn file_save(&mut self, ctx: &egui::Context) {
         println!("Save");
 
         // todo Remove clone ?
         if let Some(path) = self.file.clone().path() {
-            self.file.save_to_path(path).expect("Save file");
+            // self.file.save_to_path(path).expect("Save file");
+            self.file_save_sync(path, ctx);
         } else {
-            self.file_save_as();
+            self.file_save_as(ctx);
         }
     }
 
     /// Save file as
     ///
     /// Shows *save file* dialog
-    fn file_save_as(&mut self) {
+    fn file_save_as(&mut self, ctx: &egui::Context) {
         println!("Save as");
 
         if let Some(path) = file_dialog()
@@ -65,8 +98,56 @@ impl App {
             .map(|path_buf| path_buf.display().to_string())
         {
             self.file.set_path(&path);
-            self.file.save_to_path(&path).expect("Save file");
+            self.file_save_sync(&path, ctx);
+            // self.file_save_sync(&path);
+            // self.file.save_to_path(&path).expect("Save file");
         };
+    }
+
+    /// Save file in new thread
+    fn file_save_sync(&mut self, path: &str, ctx: &egui::Context) {
+        println!("      thread: Save");
+
+        // Set as writing
+        *self.concurrent_write.lock().unwrap() = true;
+        // Request to draw a new frame to update writing status
+        //      (otherwise it would not update until user interaction)
+        ctx.request_repaint();
+
+        // Clone values to move to thread
+        // This must be done, as closure lives longer than this method call
+        //      (as it is a new thread), so values must be moved
+
+        // Type Sender<_> can be cloned while preserving state
+        let tx = self.channel.tx.clone();
+        // path (type &str), and ctx (type &Context) can be cloned with no troubles, as they are references
+        let path = path.to_owned();
+        let ctx = ctx.clone();
+        // Note that this file is no longer the same object
+        // This is why a message needs to be sent to the main thread to update save status
+        let mut file = self.file.clone();
+        // Type Arc<Mutex<_>> can be cloned while preserving state
+        let concurrent_write = self.concurrent_write.clone();
+
+        // Create a new thread, moving values into closure
+        thread::spawn(move || {
+            // Save file
+            // This is a slow process, hence the concurrent thread
+            file.save_to_path(&path).expect("File save (sync)");
+
+            println!("      thread: Saved? {}", file.is_registered_and_saved());
+            println!("      thread: Finish save");
+
+            // Set as not writing
+            *concurrent_write.lock().unwrap() = false;
+
+            // Request to draw a new frame to update display of writing and save statuses
+            //      (otherwise it would not update until user interaction)
+            ctx.request_repaint();
+            // Send a message to main thread, to update value of save status
+            // This will be recieved on the next frame (requested above)
+            tx.send(Message::FinishSave).expect("Send message");
+        });
     }
 
     /// Open file
@@ -82,6 +163,8 @@ impl App {
                 .pick_file()
                 .map(|path_buf| path_buf.display().to_string())
             {
+                // This is a slow process, but should not use concurrent thread,
+                //      as no user actions can be performed until file loads anyway
                 self.file = File::open_path(path).expect("Open file");
             };
         }
@@ -105,28 +188,60 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // println!("Saved? {} (main)", self.file.is_registered_and_saved());
+
+        // * Handle concurrent messages
+
+        if let Ok(msg) = self.channel.rx.try_recv() {
+            match msg {
+                Message::FinishSave => {
+                    println!("Save finished!");
+                    self.file.force_set_saved();
+                }
+            }
+        }
+
+        // Concurrent file write is active
+        let concurrent_write = *self.concurrent_write.lock().unwrap();
+
+        // Disabled save action if:
+        //  - Concurrently writing a file
+        //  - Or file is registered and saved
+        let action_disabled_save = concurrent_write || self.file.is_registered_and_saved();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             // Keybinds
-            if keys!(ui: CTRL + S) {
-                self.file_save();
-            } else if keys!(ui: CTRL + SHIFT + S) {
-                self.file_save_as();
-            } else if keys!(ui: CTRL + O) {
-                self.file_open();
-            } else if keys!(ui: CTRL + N) {
-                self.file_new();
+            if !concurrent_write {
+                if keys!(ui: CTRL + S) {
+                    // Save
+                    if !action_disabled_save {
+                        self.file_save(ctx);
+                    }
+                } else if keys!(ui: CTRL + SHIFT + S) {
+                    // Save as
+                    self.file_save_as(ctx);
+                } else if keys!(ui: CTRL + O) {
+                    // Open file
+                    self.file_open();
+                } else if keys!(ui: CTRL + N) {
+                    // New blank file
+                    self.file_new();
+                }
             }
 
             ui.heading("Edit text files");
 
-            // File path and save state
             ui.horizontal(|ui| {
                 // Show filepath if file is registered
                 if let Some(path) = self.file.path() {
                     ui.monospace(path);
                 }
 
-                ui.label(if self.file.is_registered_and_saved() {
+                // Save state
+                ui.label(if concurrent_write {
+                    // File is currently being written to
+                    "Writing..."
+                } else if self.file.is_registered_and_saved() {
                     // File is registered and saved
                     "Saved"
                 } else if self.file.is_changed() {
@@ -141,29 +256,34 @@ impl eframe::App for App {
             // File actions
             ui.horizontal(|ui| {
                 // Save
-                // Disabled if file is registered and saved
                 if ui
-                    .add_enabled(
-                        !self.file.is_registered_and_saved(),
-                        egui::Button::new("Save"),
-                    )
+                    .add_enabled(!action_disabled_save, egui::Button::new("Save"))
                     .clicked()
                 {
-                    self.file_save();
+                    self.file_save(ctx);
                 }
 
                 // Save as
-                if ui.button("Save As").clicked() {
-                    self.file_save_as();
+                if ui
+                    .add_enabled(!concurrent_write, egui::Button::new("Save As"))
+                    .clicked()
+                {
+                    self.file_save_as(ctx);
                 }
 
                 // Open file
-                if ui.button("Open").clicked() {
+                if ui
+                    .add_enabled(!concurrent_write, egui::Button::new("Open"))
+                    .clicked()
+                {
                     self.file_open();
                 }
 
                 // New blank file
-                if ui.button("New").clicked() {
+                if ui
+                    .add_enabled(!concurrent_write, egui::Button::new("New"))
+                    .clicked()
+                {
                     self.file_new();
                 }
             });
@@ -199,7 +319,7 @@ impl eframe::App for App {
                         }
                         // Save file and close
                         if ui.button("Save").clicked() {
-                            self.file_save();
+                            self.file_save(ctx);
                             self.attempt_file_close_action();
                         }
                     });

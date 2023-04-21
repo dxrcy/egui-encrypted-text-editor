@@ -52,6 +52,13 @@ impl File {
         }
     }
 
+    /// Set save state to unsaved
+    ///
+    /// This should only be run after a concurrent `save_to_path`
+    pub fn force_set_saved(&mut self) {
+        self.saved = true;
+    }
+
     /// Get filepath as reference
     ///
     /// `None` if file is not registered on file system (was never saved)
@@ -68,7 +75,7 @@ impl File {
     ///
     /// Sets save state to saved
     pub fn save_to_path(&mut self, path: &str) -> io::Result<()> {
-        println!("{:?}", self.contents);
+        std::thread::sleep(std::time::Duration::from_secs(1));
 
         fs::write(path, &self.contents)?;
 
@@ -82,6 +89,8 @@ impl File {
     /// Returns saved `File` with contents and associated path
     pub fn open_path(path: impl Into<String>) -> io::Result<Self> {
         let path = path.into();
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
 
         let contents = fs::read_to_string(&path)?;
 
@@ -97,6 +106,7 @@ impl File {
 mod tests {
     use super::*;
 
+    ///todo Test with writing: true
     #[test]
     fn check_save_state() {
         // * Unregistered

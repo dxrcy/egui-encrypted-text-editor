@@ -8,10 +8,13 @@ mod attempt;
 /// Handle file input/output and save state
 mod file;
 
+mod sync;
+
 pub use crate::app::App;
 
-use crate::{attempt::Attempt, file::File};
 use std::path::PathBuf;
+
+use crate::{attempt::Attempt, file::File};
 
 /// Get default directory to open file open/save dialogs in
 fn get_start_dir() -> Option<PathBuf> {
@@ -19,6 +22,9 @@ fn get_start_dir() -> Option<PathBuf> {
         return Some(dir);
     }
     if let Some(dir) = dirs_next::desktop_dir() {
+        return Some(dir);
+    }
+    if let Some(dir) = dirs_next::home_dir() {
         return Some(dir);
     }
     None
