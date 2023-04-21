@@ -7,14 +7,14 @@ mod app;
 mod attempt;
 /// Handle file input/output and save state
 mod file;
-
-mod sync;
+/// Wrapper for `Sender` and `Receiver` types in `std::sync::mpsc`
+mod channel;
 
 pub use crate::app::App;
 
 use std::path::PathBuf;
 
-use crate::{attempt::Attempt, file::File};
+use crate::{attempt::Attempt, file::File, channel::Channel};
 
 /// Get default directory to open file open/save dialogs in
 fn get_start_dir() -> Option<PathBuf> {

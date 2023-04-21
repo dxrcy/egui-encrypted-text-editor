@@ -75,6 +75,7 @@ impl File {
     ///
     /// Sets save state to saved
     pub fn save_to_path(&mut self, path: &str) -> io::Result<()> {
+        // @ simulate slow process time, until cryption is added
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         fs::write(path, &self.contents)?;
@@ -90,6 +91,7 @@ impl File {
     pub fn open_path(path: impl Into<String>) -> io::Result<Self> {
         let path = path.into();
 
+        // @ simulate slow process time, until cryption is added
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         let contents = fs::read_to_string(&path)?;
@@ -106,7 +108,6 @@ impl File {
 mod tests {
     use super::*;
 
-    ///todo Test with writing: true
     #[test]
     fn check_save_state() {
         // * Unregistered

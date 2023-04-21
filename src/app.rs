@@ -8,41 +8,44 @@ use std::{
 use eframe::egui;
 use egui::emath::Align2;
 
-use crate::{
-    file_dialog,
-    sync::{Channel, Message},
-    Attempt, File,
-};
+use crate::{file_dialog, Attempt, Channel, File};
+
+/// Possible messages between threads
+enum ConcurrentMessage {
+    /// Save has succeeded
+    FinishSave,
+}
 
 /// Main app state
-// #[derive(Default)]
+#[derive(Default)]
 pub struct App {
-    channel: Channel,
-
     /// Current file opened
     file: File,
+
+    /// Attempt to close file (See `Attempt`)
+    file_close: Attempt<CloseAction>,
 
     /// Whether file is currently writing
     concurrent_write: Arc<Mutex<bool>>,
 
-    /// Attempt to close file (See `Attempt`)
-    file_close: Attempt<CloseAction>,
+    /// Send messages between threads
+    channel: Channel<ConcurrentMessage>,
 }
 
-// @ debug
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            channel: Default::default(),
+// // @ debug
+// impl Default for App {
+//     fn default() -> Self {
+//         Self {
+//             channel: Default::default(),
 
-            file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
+//             file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
 
-            concurrent_write: Default::default(),
+//             concurrent_write: Default::default(),
 
-            file_close: Default::default(),
-        }
-    }
-}
+//             file_close: Default::default(),
+//         }
+//     }
+// }
 
 /// Actions to allow after close attempt passes
 enum CloseAction {
@@ -80,7 +83,6 @@ impl App {
 
         // todo Remove clone ?
         if let Some(path) = self.file.clone().path() {
-            // self.file.save_to_path(path).expect("Save file");
             self.file_save_sync(path, ctx);
         } else {
             self.file_save_as(ctx);
@@ -119,7 +121,7 @@ impl App {
         //      (as it is a new thread), so values must be moved
 
         // Type Sender<_> can be cloned while preserving state
-        let tx = self.channel.tx.clone();
+        let tx = self.channel.sender.clone();
         // path (type &str), and ctx (type &Context) can be cloned with no troubles, as they are references
         let path = path.to_owned();
         let ctx = ctx.clone();
@@ -146,7 +148,8 @@ impl App {
             ctx.request_repaint();
             // Send a message to main thread, to update value of save status
             // This will be recieved on the next frame (requested above)
-            tx.send(Message::FinishSave).expect("Send message");
+            tx.send(ConcurrentMessage::FinishSave)
+                .expect("Send message");
         });
     }
 
@@ -192,9 +195,9 @@ impl eframe::App for App {
 
         // * Handle concurrent messages
 
-        if let Ok(msg) = self.channel.rx.try_recv() {
+        if let Ok(msg) = self.channel.receiver.try_recv() {
             match msg {
-                Message::FinishSave => {
+                ConcurrentMessage::FinishSave => {
                     println!("Save finished!");
                     self.file.force_set_saved();
                 }
