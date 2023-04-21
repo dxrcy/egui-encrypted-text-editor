@@ -20,7 +20,7 @@ impl File {
     }
 
     /// Returns `true` if file is registered and saved
-    pub fn is_saved(&self) -> bool {
+    pub fn is_registered_and_saved(&self) -> bool {
         self.is_registered() && self.saved
     }
 
@@ -47,7 +47,7 @@ impl File {
 
     /// Set save state to unsaved
     pub fn mark_as_unsaved(&mut self) {
-        if self.is_saved() {
+        if self.is_registered_and_saved() {
             self.saved = false;
         }
     }
@@ -106,7 +106,7 @@ mod tests {
 
         // Default (Unregistered, Empty)
         let file = File::default();
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), false);
 
         // Unregistered, Empty
@@ -115,7 +115,7 @@ mod tests {
             contents: String::new(),
             saved: false,
         };
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), false);
         // Same, but saved (should not matter)
         let file = File {
@@ -123,7 +123,7 @@ mod tests {
             contents: String::new(),
             saved: true,
         };
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), false);
 
         // Unregistered, NON-Empty
@@ -132,7 +132,7 @@ mod tests {
             contents: String::from("Some contents"),
             saved: false,
         };
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), true);
         // Same, but saved (should not matter)
         let file = File {
@@ -140,7 +140,7 @@ mod tests {
             contents: String::from("Some contents"),
             saved: true,
         };
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), true);
 
         // * Registered
@@ -154,7 +154,7 @@ mod tests {
             contents: String::new(),
             saved: false,
         };
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), true);
         // Same, but non-empty (should not matter)
         let file = File {
@@ -162,7 +162,7 @@ mod tests {
             contents: String::from("Some contents"),
             saved: false,
         };
-        assert_eq!(file.is_saved(), false);
+        assert_eq!(file.is_registered_and_saved(), false);
         assert_eq!(file.is_changed(), true);
 
         // Registered, saved
@@ -171,7 +171,7 @@ mod tests {
             contents: String::new(),
             saved: true,
         };
-        assert_eq!(file.is_saved(), true);
+        assert_eq!(file.is_registered_and_saved(), true);
         assert_eq!(file.is_changed(), false);
         // Same, but non-empty (should not matter)
         let file = File {
@@ -179,7 +179,7 @@ mod tests {
             contents: String::from("Some contents"),
             saved: true,
         };
-        assert_eq!(file.is_saved(), true);
+        assert_eq!(file.is_registered_and_saved(), true);
         assert_eq!(file.is_changed(), false);
     }
 }
