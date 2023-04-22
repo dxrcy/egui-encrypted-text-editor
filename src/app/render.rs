@@ -1,6 +1,6 @@
-use eframe::{egui, emath::Align2};
+use eframe::{egui, emath::Align2, epaint::Color32};
 
-use super::{CloseFileAction, App, ConcurrentMessage};
+use super::{App, CloseFileAction, ConcurrentMessage};
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -74,9 +74,20 @@ impl eframe::App for App {
                     "UNSAVED"
                 } else {
                     // File is unregistered
-                    ""
+                    "No file open"
                 });
             });
+
+            // Cryption key (password)
+            ui.horizontal(|ui| {
+                let label = ui.label("Password: ");
+                ui.monospace(&self.key).labelled_by(label.id);
+            });
+
+            // Error message
+            if let Some(error) = *self.error.lock().unwrap() {
+                ui.colored_label(Color32::RED, error);
+            }
 
             // File actions
             ui.horizontal(|ui| {
@@ -173,7 +184,8 @@ impl eframe::App for App {
     // ALT+F4, Close button, ect.
     fn on_close_event(&mut self) -> bool {
         // Set file close action to quit app
-        self.attempting_file_close.set_action(CloseFileAction::CloseWindow);
+        self.attempting_file_close
+            .set_action(CloseFileAction::CloseWindow);
         // Returns true if file is allowed to close
         self.file_can_close()
     }

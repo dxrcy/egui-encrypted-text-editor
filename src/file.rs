@@ -1,4 +1,6 @@
-use std::{fs, io};
+use std::{fs, io, string::FromUtf8Error};
+
+use cocoon::Cocoon;
 
 /// Simple file handler API
 #[derive(Clone, Default)]
@@ -11,6 +13,24 @@ pub struct File {
     contents: String,
     /// Whether file is saved
     saved: bool,
+}
+
+#[allow(dead_code)]
+/// Error for `EncryptedFile` struct
+#[derive(Debug)]
+pub enum FileError {
+    /// `io::Error`
+    Io(io::Error),
+    /// Cocoon error
+    ///
+    /// Encryption or decryption failed due to bad file
+    ///    
+    /// Should not occur
+    Cryption(cocoon::Error),
+    /// Failed to convert bytes to `String`
+    ///
+    /// Should not occur
+    FromUtf8Error(FromUtf8Error),
 }
 
 impl File {
@@ -74,11 +94,24 @@ impl File {
     /// Save file to given path
     ///
     /// Sets save state to saved
-    pub fn save_to_path(&mut self, path: &str) -> io::Result<()> {
-        // @ simulate slow process time, until cryption is added
-        std::thread::sleep(std::time::Duration::from_secs(2));
+    pub fn save_to_path(&mut self, path: &str, key: &str) -> Result<(), FileError> {
+        // // @ simulate slow process time, until cryption is added
+        // std::thread::sleep(std::time::Duration::from_secs(2));
 
-        fs::write(path, &self.contents)?;
+        // fs::write(path, &self.contents)?;
+
+        let cocoon = Cocoon::new(key.as_bytes());
+        
+        let bytes = self.contents.clone().into_bytes().to_vec();
+
+        let mut file = match fs::File::create(path) {
+            Ok(file) => file,
+            Err(err) => return Err(FileError::Io(err)),
+        };
+
+        if let Err(err) = cocoon.dump(bytes, &mut file) {
+            return Err(FileError::Cryption(err));
+        };
 
         self.saved = true;
 
@@ -88,13 +121,30 @@ impl File {
     /// Open file from given path
     ///
     /// Returns saved `File` with contents and associated path
-    pub fn open_path(path: impl Into<String>) -> io::Result<Self> {
+    pub fn open_path(path: impl Into<String>, key: &str) -> Result<Self, FileError> {
         let path = path.into();
 
-        // @ simulate slow process time, until cryption is added
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        // // @ simulate slow process time, until cryption is added
+        // std::thread::sleep(std::time::Duration::from_secs(1));
 
-        let contents = fs::read_to_string(&path)?;
+        // let contents = fs::read_to_string(&path)?;
+
+        let cocoon = Cocoon::new(key.as_bytes());
+
+        let mut file = match fs::File::open(&path) {
+            Ok(file) => file,
+            Err(err) => return Err(FileError::Io(err)),
+        };
+
+        let bytes = match cocoon.parse(&mut file) {
+            Ok(bytes) => bytes,
+            Err(err) => return Err(FileError::Cryption(err)),
+        };
+
+        let contents = match String::from_utf8(bytes) {
+            Ok(string) => string,
+            Err(err) => return Err(FileError::FromUtf8Error(err)),
+        };
 
         Ok(Self {
             contents,

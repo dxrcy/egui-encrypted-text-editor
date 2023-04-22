@@ -2,8 +2,8 @@ use std::thread;
 
 use eframe::egui;
 
-use super::{CloseFileAction, App, ConcurrentMessage};
-use crate::{file_dialog, File};
+use super::{App, CloseFileAction, ConcurrentMessage};
+use crate::{file::FileError, file_dialog, File};
 
 impl App {
     // * Save file (save, save as)
@@ -59,21 +59,48 @@ impl App {
         // This is why a message needs to be sent to the main thread to update save status
         let mut file = self.file.clone();
 
-        // path (type &str), and ctx (type &Context) can be cloned with no troubles,
-        //      as they are references
+        // path and key (both type String), and ctx (type Context) can be cloned with no troubles
         let path = path.to_owned();
+        let key = self.key.clone();
         let ctx = ctx.clone();
 
-        // These two variables (types Sender<_> and Arc<Mutex<_>>) can be
+        // These variables (types Sender<_> and Arc<Mutex<_>>) can be
         //      cloned and moved into threads, while preserving state
         let sender = self.channel.sender.clone();
         let concurrent_write = self.writing.clone();
+        let error = self.error.clone();
 
         // Create a new thread, moving values into closure
         thread::spawn(move || {
-            // Save file
+            // Save file and Handle errors
             // This is a slow process, hence the concurrent thread
-            file.save_to_path(&path).expect("File save (concurrent)");
+            if let Err(err) = file.save_to_path(&path, &key) {
+                match err {
+                    //todo move to function
+                    FileError::Cryption(err) => {
+                        println!("cryption error: {:?}", err);
+
+                        let error_msg = Some(match err {
+                            cocoon::Error::Cryptography => "Invalid password",
+                            cocoon::Error::UnrecognizedFormat => {
+                                "Invalid file: Unrecognized format"
+                            }
+                            cocoon::Error::TooLarge => "Invalid file: Too large",
+                            cocoon::Error::TooShort => "Invalid file: Too short",
+
+                            cocoon::Error::Io(err) => panic!("[io] {:?}", err),
+                        });
+
+                        *error.lock().unwrap() = error_msg;
+                    }
+
+                    FileError::FromUtf8Error(_) => {
+                        *error.lock().unwrap() = Some("Invalid file: Not formatted as string")
+                    }
+
+                    FileError::Io(err) => panic!("[io] {:?}", err),
+                }
+            }
 
             // println!(
             //     "      concurrent: Saved? {}",
@@ -105,7 +132,8 @@ impl App {
         println!("Open");
 
         if !self.file_can_close() {
-            self.attempting_file_close.set_action(CloseFileAction::OpenFile);
+            self.attempting_file_close
+                .set_action(CloseFileAction::OpenFile);
             // self.attempting_file_close = Some(Action::OpenFile);
             return;
         }
@@ -116,7 +144,39 @@ impl App {
         {
             // This is a slow process, but should not use concurrent thread,
             //      as no user actions can be performed until file loads anyway
-            self.file = File::open_path(path).expect("Open file");
+            match File::open_path(path, &self.key) {
+                // Successful read
+                Ok(file) => {
+                    self.file = file;
+                }
+
+                // Handle errors
+                Err(err) => match err {
+                    //todo move to function
+                    FileError::Cryption(err) => {
+                        println!("cryption error: {:?}", err);
+
+                        let error_msg = Some(match err {
+                            cocoon::Error::Cryptography => "Invalid password",
+                            cocoon::Error::UnrecognizedFormat => {
+                                "Invalid file: Unrecognized format"
+                            }
+                            cocoon::Error::TooLarge => "Invalid file: Too large",
+                            cocoon::Error::TooShort => "Invalid file: Too short",
+
+                            cocoon::Error::Io(err) => panic!("[io] {:?}", err),
+                        });
+
+                        *self.error.lock().unwrap() = error_msg;
+                    }
+
+                    FileError::FromUtf8Error(_) => {
+                        *self.error.lock().unwrap() = Some("Invalid file: Not formatted as string")
+                    }
+
+                    FileError::Io(err) => panic!("[io] {:?}", err),
+                },
+            }
         };
     }
 
@@ -131,7 +191,8 @@ impl App {
         println!("? New file");
 
         if !self.file_can_close() {
-            self.attempting_file_close.set_action(CloseFileAction::NewFile);
+            self.attempting_file_close
+                .set_action(CloseFileAction::NewFile);
             // self.attempting_file_close = Some(Action::NewFile);
             return;
         }
@@ -143,10 +204,10 @@ impl App {
 
     // * Handle file close
 
-    /// Returns `true` if condition is met for file to close, or is overridden
+    /// Returns `true` if file is not changed, or condition is overridden
     pub(super) fn file_can_close(&self) -> bool {
         self.attempting_file_close
-            .check_condition(self.file.is_registered_and_saved())
+            .check_condition(!self.file.is_changed())
     }
 
     /// Run close action if allowed

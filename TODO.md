@@ -9,3 +9,5 @@
 3.  Add error message for corrupted file (not encrypted properly)
 
 4.  Add filter for `.enc` files (easy)
+
+5. Add popup for error message

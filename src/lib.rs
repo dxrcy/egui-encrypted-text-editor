@@ -5,16 +5,15 @@ mod macros;
 mod app;
 /// 'Attempt' something, such as close a file
 mod attempt;
-/// Handle file input/output and save state
-mod file;
 /// Wrapper for `Sender` and `Receiver` types in `std::sync::mpsc`
 mod channel;
-
-pub use crate::app::App;
+/// Handle file input/output and save state
+mod file;
 
 use std::path::PathBuf;
 
-use crate::{attempt::Attempt, file::File, channel::Channel};
+pub use crate::app::App;
+use crate::{attempt::Attempt, channel::Channel, file::File};
 
 /// Get default directory to open file open/save dialogs in
 fn get_start_dir() -> Option<PathBuf> {
