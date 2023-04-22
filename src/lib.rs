@@ -31,7 +31,7 @@ fn get_start_dir() -> Option<PathBuf> {
 
 /// Create simple file open/save dialog with `rfd`
 fn file_dialog() -> rfd::FileDialog {
-    let dialog = rfd::FileDialog::new();
+    let dialog = rfd::FileDialog::new().add_filter("Encrypted file", &["enc"]);
 
     if let Some(dir) = get_start_dir() {
         dialog.set_directory(dir)
