@@ -1,6 +1,6 @@
 use eframe::{egui, emath::Align2};
 
-use super::{Action, App, ConcurrentMessage};
+use super::{CloseFileAction, App, ConcurrentMessage};
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -9,8 +9,6 @@ impl eframe::App for App {
         if self.close_window_on_next_frame {
             frame.close();
         }
-
-        // println!("Saved? {} (main)", self.file.is_registered_and_saved());
 
         // * Handle concurrent messages
 
@@ -27,25 +25,25 @@ impl eframe::App for App {
             }
         }
 
-        // Concurrent file write is active
+        // * Render main window
+
+        // Whether the file is currently writing on a different thread
         let concurrently_writing = *self.writing.lock().unwrap();
 
-        // Disabled save action if:
-        //  - Concurrently writing a file
-        //  - Or file is registered and saved
-        let action_disabled_save = concurrently_writing || self.file.is_registered_and_saved();
+        // Whether the save action should be disabled
+        let disable_save_action = concurrently_writing || self.file.is_registered_and_saved();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Keybinds
-            // These mirror the ui buttons, but should be written separate, as buttons can be disabled
+            // These mirror the ui buttons, but should be kept separate in code, as buttons can be disabled
             if !concurrently_writing {
                 if keys!(ui: CTRL + S) {
-                    // Save (concurrent)
-                    if !action_disabled_save {
-                        self.file_save(ctx);
+                    // Save
+                    if !disable_save_action {
+                        self.file_save_or_save_as(ctx);
                     }
                 } else if keys!(ui: CTRL + SHIFT + S) {
-                    // Save as (concurrent)
+                    // Save as
                     self.file_save_as(ctx);
                 } else if keys!(ui: CTRL + O) {
                     // Open file
@@ -82,22 +80,20 @@ impl eframe::App for App {
 
             // File actions
             ui.horizontal(|ui| {
-                // Save (concurrent)
+                // Save
                 if ui
-                    .add_enabled(!action_disabled_save, egui::Button::new("Save"))
+                    .add_enabled(!disable_save_action, egui::Button::new("Save"))
                     .clicked()
                 {
-                    self.file_save(ctx);
+                    self.file_save_or_save_as(ctx);
                 }
-
-                // Save as (concurrent)
+                // Save as
                 if ui
                     .add_enabled(!concurrently_writing, egui::Button::new("Save As"))
                     .clicked()
                 {
                     self.file_save_as(ctx);
                 }
-
                 // Open file
                 if ui
                     .add_enabled(!concurrently_writing, egui::Button::new("Open"))
@@ -105,7 +101,6 @@ impl eframe::App for App {
                 {
                     self.file_open();
                 }
-
                 // New blank file
                 if ui
                     .add_enabled(!concurrently_writing, egui::Button::new("New"))
@@ -123,11 +118,16 @@ impl eframe::App for App {
             }
         });
 
+        // * Render popup windows
+
         // Attempting to close file
         // Create custom window dialog if necessary
         if self.attempting_file_close.is_attempting() {
             if concurrently_writing {
                 // Wait for file to finish writing
+                // This cannot be overridden with a button,
+                //      because it would only ever need to be closed while the file is writing
+                //      if the program has frozen, and in that case it can be closed with task manager
                 dialog_window("Waiting for file to save...").show(ctx, |ui| {
                     ui.label("File may corrupt if not saved properly.")
                 });
@@ -158,7 +158,7 @@ impl eframe::App for App {
                         if ui.button("Save").clicked() {
                             // Save (concurrently)
                             // This will show 'wait for file to save' until save completes
-                            self.file_save(ctx);
+                            self.file_save_or_save_as(ctx);
 
                             // Try action again
                             self.call_close_action();
@@ -173,13 +173,13 @@ impl eframe::App for App {
     // ALT+F4, Close button, ect.
     fn on_close_event(&mut self) -> bool {
         // Set file close action to quit app
-        self.attempting_file_close.set_action(Action::CloseWindow);
+        self.attempting_file_close.set_action(CloseFileAction::CloseWindow);
         // Returns true if file is allowed to close
         self.file_can_close()
     }
 }
 
-/// Create a simple reusable dialog window
+/// Create a simple reusable popup dialog window
 fn dialog_window(title: &str) -> egui::Window {
     egui::Window::new(title)
         .collapsible(false)

@@ -14,7 +14,7 @@ enum ConcurrentMessage {
 }
 
 /// Actions to allow after close attempt passes
-enum Action {
+enum CloseFileAction {
     NewFile,
     OpenFile,
     CloseWindow,
@@ -30,7 +30,7 @@ pub struct App {
     writing: Arc<Mutex<bool>>,
 
     /// Attempt to close file (See `Attempt`)
-    attempting_file_close: Attempt<Action>,
+    attempting_file_close: Attempt<CloseFileAction>,
 
     close_window_on_next_frame: bool,
 
