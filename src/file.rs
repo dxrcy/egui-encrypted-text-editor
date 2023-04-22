@@ -54,7 +54,7 @@ impl File {
 
     /// Set save state to unsaved
     ///
-    /// This should only be run after a concurrent `save_to_path`
+    // /// This should only be run after a concurrent `save_to_path`
     pub fn force_set_saved(&mut self) {
         self.saved = true;
     }
@@ -76,7 +76,7 @@ impl File {
     /// Sets save state to saved
     pub fn save_to_path(&mut self, path: &str) -> io::Result<()> {
         // @ simulate slow process time, until cryption is added
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_secs(2));
 
         fs::write(path, &self.contents)?;
 
