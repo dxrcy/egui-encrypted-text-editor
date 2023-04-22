@@ -25,12 +25,6 @@ impl<T> Default for Attempt<T> {
 impl<T> Attempt<T> {
     /// Returns `true` if condition is met or overridden
     pub fn check_condition(&self, condition: bool) -> bool {
-        println!(
-            "{} || {} == {}",
-            condition,
-            self.overridden,
-            condition || self.overridden
-        );
         condition || self.overridden
     }
 

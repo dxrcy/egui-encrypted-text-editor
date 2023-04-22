@@ -37,7 +37,7 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Keybinds
-            //todo move to buttons
+            // These mirror the ui buttons, but should be written separate, as buttons can be disabled
             if !concurrently_writing {
                 if keys!(ui: CTRL + S) {
                     // Save (concurrent)

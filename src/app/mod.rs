@@ -21,7 +21,7 @@ enum Action {
 }
 
 /// Main app state
-// #[derive(Default)]
+#[derive(Default)]
 pub struct App {
     /// Current file opened
     file: File,
@@ -31,10 +31,6 @@ pub struct App {
 
     /// Attempt to close file (See `Attempt`)
     attempting_file_close: Attempt<Action>,
-    
-    // attempting_file_close: Option<Action>,
-    // override_saved: bool,
-    // override_not_writing: bool,
 
     close_window_on_next_frame: bool,
 
@@ -42,21 +38,19 @@ pub struct App {
     channel: Channel<ConcurrentMessage>,
 }
 
-// @ debug
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
+// // @ debug
+// impl Default for App {
+//     fn default() -> Self {
+//         Self {
+//             file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
 
-            writing: Default::default(),
+//             writing: Default::default(),
 
-            attempting_file_close: Default::default(),
-            // override_saved: Default::default(),
-            // override_not_writing: Default::default(),
+//             attempting_file_close: Default::default(),
 
-            close_window_on_next_frame: Default::default(),
+//             close_window_on_next_frame: Default::default(),
 
-            channel: Default::default(),
-        }
-    }
-}
+//             channel: Default::default(),
+//         }
+//     }
+// }

@@ -1,9 +1,5 @@
 # TODO
 
-1.  Add dialog for closing while saving
-
-    -   Test manually!
-
 2.  Add encryption
 
     -   Encrypt on file `save_to_path`
