@@ -16,7 +16,7 @@ pub use crate::app::App;
 use crate::{attempt::Attempt, channel::Channel, file::File};
 
 /// Cryption key which every file uses
-/// 
+///
 /// This is not very secure, but at least the file cannot be opened by any program
 const KEY: &str = "super-secure-encryption-key";
 

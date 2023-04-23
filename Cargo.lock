@@ -901,6 +901,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "encrypted-text-editor"
+version = "0.1.0"
+dependencies = [
+ "cocoon",
+ "dirs-next",
+ "eframe",
+ "rfd",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "enumflags2"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2314,17 +2325,6 @@ dependencies = [
  "redox_syscall 0.3.5",
  "rustix",
  "windows-sys 0.45.0",
-]
-
-[[package]]
-name = "text-editor"
-version = "0.1.0"
-dependencies = [
- "cocoon",
- "dirs-next",
- "eframe",
- "rfd",
- "tracing-subscriber",
 ]
 
 [[package]]

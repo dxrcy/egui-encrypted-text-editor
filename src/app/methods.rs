@@ -256,7 +256,6 @@ fn display_crypto_error(error: cocoon::Error) -> &'static str {
             io::ErrorKind::PermissionDenied => "Permission denied",
 
             // ... more IO errors can be handled here
-
             _ => "Unknown file error! Please try again",
         },
     }

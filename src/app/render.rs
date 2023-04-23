@@ -1,4 +1,7 @@
-use eframe::{egui, emath::Align2, epaint::Color32};
+use eframe::{
+    egui::{self, TextEdit},
+    emath::Align2,
+};
 
 use super::{App, CloseFileAction, ConcurrentMessage};
 
@@ -31,36 +34,9 @@ impl eframe::App for App {
         let concurrently_writing = *self.writing.lock().unwrap();
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Edit text files");
+            ui.heading("Encrypted text editor");
 
-            ui.horizontal(|ui| {
-                // Show filepath if file is registered
-                if let Some(path) = self.file.path() {
-                    ui.monospace(path);
-                }
-
-                // Save state
-                ui.label(if concurrently_writing {
-                    // File is currently being written to
-                    "Writing..."
-                } else if self.file.is_registered_and_saved() {
-                    // File is registered and saved
-                    "Saved"
-                } else if self.file.is_changed() {
-                    // File has changed
-                    "UNSAVED"
-                } else {
-                    // File is unregistered
-                    "No file open"
-                });
-
-                // Error message
-                if let Some(error) = *self.error_message.lock().unwrap() {
-                    ui.colored_label(Color32::RED, error);
-                }
-            });
-
-            // File actions
+            // File actions and status
             ui.horizontal(|ui| {
                 /// Create new action, with button and keybind
                 macro_rules! action_button_and_keybind {
@@ -104,10 +80,32 @@ impl eframe::App for App {
                 action_button_and_keybind!( "New", (CTRL + N), if !self.file.is_unregistered_and_unchanged() => {
                     self.file_new();
                 });
+                
+                // Show filepath if file is registered
+                if let Some(path) = self.file.path() {
+                    ui.monospace(path);
+                }
+
+                // Save state
+                ui.label(if concurrently_writing {
+                    // File is currently being written to
+                    "Writing..."
+                } else if self.file.is_registered_and_saved() {
+                    // File is registered and saved
+                    "Saved"
+                } else if self.file.is_changed() {
+                    // File has changed
+                    "UNSAVED"
+                } else {
+                    // File is unregistered
+                    ""
+                });
             });
 
             // Editable text of file contents
-            let edit_contents = ui.text_edit_multiline(self.file.contents_mut());
+            let edit_contents = TextEdit::multiline(self.file.contents_mut()).code_editor();
+            let edit_contents = ui.add_sized( ui.available_size(), edit_contents);
+
             // Set save state to unsaved if text was changed
             if edit_contents.changed() {
                 self.file.mark_as_unsaved();
