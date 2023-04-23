@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{fs, io, string::FromUtf8Error};
+use std::{fs, io};
 
 use cocoon::Cocoon;
 
@@ -16,24 +16,6 @@ pub struct File {
     contents: String,
     /// Whether file is saved
     saved: bool,
-}
-
-#[allow(dead_code)]
-/// Error for `EncryptedFile` struct
-#[derive(Debug)]
-pub enum FileError {
-    /// `io::Error`
-    Io(io::Error),
-    /// Cocoon error
-    ///
-    /// Encryption or decryption failed due to bad file
-    ///    
-    /// Should not occur
-    Cryption(cocoon::Error),
-    /// Failed to convert bytes to `String`
-    ///
-    /// Should not occur
-    FromUtf8Error(FromUtf8Error),
 }
 
 impl File {
@@ -82,7 +64,8 @@ impl File {
 
     /// Set save state to unsaved
     ///
-    // /// This should only be run after a concurrent `save_to_path`
+    /// This should only be run after saving with `save_to_path`,
+    ///     which did not register as saved
     pub fn force_set_saved(&mut self) {
         self.saved = true;
     }
@@ -102,46 +85,64 @@ impl File {
     /// Save encrypted file to given path
     ///
     /// Sets save state to saved
-    pub fn save_to_path_encrypted(&mut self, path: &str, key: &str) -> Result<(), FileError> {
+    pub fn save_to_path_encrypted(&mut self, path: &str, key: &str) -> Result<(), cocoon::Error> {
+        // Create encryptor
         let cocoon = Cocoon::new(key.as_bytes());
 
+        // Get content as bytes
         let bytes = self.contents.clone().into_bytes().to_vec();
 
+        // Open file (creates new if not already existing)
         let mut file = match fs::File::create(path) {
             Ok(file) => file,
-            Err(err) => return Err(FileError::Io(err)),
+
+            // Return an IO error if failed
+            Err(error) => return Err(cocoon::Error::Io(error)),
         };
 
-        if let Err(err) = cocoon.dump(bytes, &mut file) {
-            return Err(FileError::Cryption(err));
-        };
+        // Write encrypted data to file
+        cocoon.dump(bytes, &mut file)?;
 
         self.saved = true;
-
         Ok(())
     }
 
     /// Open encrypted file from given path
     ///
     /// Returns saved `File` with contents and associated path
-    pub fn open_path_and_decrypt(path: impl Into<String>, key: &str) -> Result<Self, FileError> {
+    pub fn open_path_and_decrypt(
+        path: impl Into<String>,
+        key: &str,
+    ) -> Result<Self, cocoon::Error> {
         let path = path.into();
 
+        // Create decryptor
         let cocoon = Cocoon::new(key.as_bytes());
 
+        // Open existing file
         let mut file = match fs::File::open(&path) {
             Ok(file) => file,
-            Err(err) => return Err(FileError::Io(err)),
+
+            // Return an IO error if failed
+            Err(error) => return Err(cocoon::Error::Io(error)),
         };
 
-        let bytes = match cocoon.parse(&mut file) {
-            Ok(bytes) => bytes,
-            Err(err) => return Err(FileError::Cryption(err)),
-        };
+        // Decrypt data (bytes) from file
+        let bytes = cocoon.parse(&mut file)?;
 
+        // Convert bytes to string
+        // This may fail, if bytes do not form a valid utf8 string
         let contents = match String::from_utf8(bytes) {
             Ok(string) => string,
-            Err(err) => return Err(FileError::FromUtf8Error(err)),
+
+            // Bytes-to-string conversion failed
+            // Return IO error of 'Invalid Data'
+            Err(error) => {
+                return Err(cocoon::Error::from(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    error,
+                )))
+            }
         };
 
         Ok(Self {

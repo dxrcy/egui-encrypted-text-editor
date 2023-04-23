@@ -39,7 +39,7 @@ pub struct App {
     channel: Channel<ConcurrentMessage>,
 
     /// Display any error message
-    error: Arc<Mutex<Option<&'static str>>>,
+    error_message: Arc<Mutex<Option<&'static str>>>,
 }
 
 // // @ debug

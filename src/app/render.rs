@@ -17,7 +17,6 @@ impl eframe::App for App {
                 ConcurrentMessage::FinishConcurrentSave => {
                     println!("Save finished!");
                     self.file.force_set_saved();
-                    self.clear_error();
 
                     if self.attempting_file_close.is_attempting() {
                         self.call_close_action();
@@ -30,17 +29,6 @@ impl eframe::App for App {
 
         // Whether the file is currently writing on a different thread
         let concurrently_writing = *self.writing.lock().unwrap();
-
-        // // Whether each action is enabled (All disabled if writing)
-        // // Save: If file is unregistered, or unsaved
-        // let action_enabled_save = !concurrently_writing && !self.file.is_registered_and_saved();
-        // // Save as: No condition
-        // let action_enabled_save_as = !concurrently_writing;
-        // // Open: No condition
-        // let action_enabled_open = !concurrently_writing;
-        // // Open: If file is unregistered and not changed (blank new file already)
-        // let action_enabled_new =
-        //     !concurrently_writing && !self.file.is_unregistered_and_unchanged();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Edit text files");
@@ -67,7 +55,7 @@ impl eframe::App for App {
                 });
 
                 // Error message
-                if let Some(error) = *self.error.lock().unwrap() {
+                if let Some(error) = *self.error_message.lock().unwrap() {
                     ui.colored_label(Color32::RED, error);
                 }
             });
@@ -174,6 +162,19 @@ impl eframe::App for App {
                     });
                 });
             }
+        }
+
+        // Error message popup
+        if let Some(error_msg) = self.get_error_message() {
+            dialog_window("Error").show(ctx, |ui| {
+                ui.heading("An error occurred!");
+
+                ui.label(error_msg);
+
+                if ui.button("Ok").clicked() {
+                    self.clear_error_message();
+                }
+            });
         }
     }
 

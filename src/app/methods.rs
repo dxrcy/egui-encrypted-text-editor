@@ -1,26 +1,30 @@
-use std::thread;
+use std::{io, thread};
 
 use eframe::egui;
 
 use super::{App, CloseFileAction, ConcurrentMessage};
-use crate::{
-    file::{File, FileError},
-    file_dialog, KEY,
-};
+use crate::{file_dialog, File, KEY};
 
 impl App {
+    // * Error messages
+
     /// Set error message
     ///
     /// This function can only be used in main thread
-    fn set_error(&mut self, error: &'static str) {
-        *self.error.lock().unwrap() = Some(error);
+    fn set_error_message(&mut self, message: &'static str) {
+        *self.error_message.lock().unwrap() = Some(message);
+    }
+
+    /// Get error message from shared state
+    pub fn get_error_message(&self) -> Option<&'static str> {
+        *self.error_message.lock().unwrap()
     }
 
     /// Remove error message
     ///
     /// This function can only be used in main thread
-    pub fn clear_error(&mut self) {
-        *self.error.lock().unwrap() = None;
+    pub fn clear_error_message(&mut self) {
+        *self.error_message.lock().unwrap() = None;
     }
 
     // * Save file (save, save as)
@@ -84,50 +88,36 @@ impl App {
         //      cloned and moved into threads, while preserving state
         let sender = self.channel.sender.clone();
         let concurrent_write = self.writing.clone();
-        let error = self.error.clone();
+        let error_message = self.error_message.clone();
 
         // Create a new thread, moving values into closure
         thread::spawn(move || {
             // Save file and Handle errors
-            // This is a slow process, hence the concurrent thread
-            if let Err(err) = file.save_to_path_encrypted(&path, KEY) {
-                match err {
-                    //todo move to function
-                    FileError::Cryption(err) => {
-                        println!("cryption error: {:?}", err);
+            // This can be a slow process (especially in debug build), hence the concurrent thread
+            match file.save_to_path_encrypted(&path, KEY) {
+                // Successful save
+                Ok(()) => {
+                    // Send a message to main thread, to update value of save status
+                    // This will be recieved on the next frame (requested above)
+                    sender
+                        .send(ConcurrentMessage::FinishConcurrentSave)
+                        .expect("Send message")
+                }
 
-                        let error_msg = Some(match err {
-                            cocoon::Error::Cryptography => "Invalid password",
-                            cocoon::Error::UnrecognizedFormat => {
-                                "Invalid file: Unrecognized format"
-                            }
-                            cocoon::Error::TooLarge => "Invalid file: Too large",
-                            cocoon::Error::TooShort => "Invalid file: Too short",
-
-                            cocoon::Error::Io(err) => panic!("[io] {:?}", err),
-                        });
-
-                        *error.lock().unwrap() = error_msg;
-                    }
-
-                    FileError::FromUtf8Error(_) => {
-                        *error.lock().unwrap() = Some("Invalid file: Not formatted as string")
-                    }
-
-                    FileError::Io(err) => panic!("[io] {:?}", err),
+                // An error occurred
+                // Display a readable error on UI
+                Err(error) => {
+                    *error_message.lock().unwrap() = Some(display_crypto_error(error));
                 }
             }
 
             // Set as not writing
             *concurrent_write.lock().unwrap() = false;
+
+            // ? Needed ?
             // Request to draw a new frame to update display of writing and save statuses
             //      (otherwise it would not update until user interaction)
             ctx.request_repaint();
-            // Send a message to main thread, to update value of save status
-            // This will be recieved on the next frame (requested above)
-            sender
-                .send(ConcurrentMessage::FinishConcurrentSave)
-                .expect("Send message");
         });
     }
 
@@ -140,8 +130,6 @@ impl App {
     /// Shows *open file* dialog
     pub(super) fn file_open(&mut self) {
         println!("Open");
-
-        self.clear_error();
 
         if !self.file_can_close() {
             self.attempting_file_close
@@ -157,11 +145,10 @@ impl App {
             // Same file is already open
             // Don't open again
             if Some(&path) == self.file.path() {
-                println!("  Save file");
                 return;
             }
 
-            // This is a slow process, but should not use concurrent thread,
+            // This can be a slow process (especially in debug build), but should not use concurrent thread,
             //      as no user actions can be performed until file loads anyway
             match File::open_path_and_decrypt(path, KEY) {
                 // Successful read
@@ -169,30 +156,9 @@ impl App {
                     self.file = file;
                 }
 
-                // Handle errors
-                Err(err) => match err {
-                    //todo move to function
-                    FileError::Cryption(err) => {
-                        println!("cryption error: {:?}", err);
-
-                        self.set_error(match err {
-                            cocoon::Error::Cryptography => "Invalid password",
-                            cocoon::Error::UnrecognizedFormat => {
-                                "Invalid file: Unrecognized format"
-                            }
-                            cocoon::Error::TooLarge => "Invalid file: Too large",
-                            cocoon::Error::TooShort => "Invalid file: Too short",
-
-                            cocoon::Error::Io(err) => panic!("[io] {:?}", err),
-                        });
-                    }
-
-                    FileError::FromUtf8Error(_) => {
-                        self.set_error("Invalid file: Not formatted as string")
-                    }
-
-                    FileError::Io(err) => panic!("[io] {:?}", err),
-                },
+                // An error occurred
+                // Display a readable  error on UI
+                Err(error) => self.set_error_message(display_crypto_error(error)),
             }
         };
     }
@@ -207,12 +173,9 @@ impl App {
     pub(super) fn file_new(&mut self) {
         println!("? New file");
 
-        self.clear_error();
-
         if !self.file_can_close() {
             self.attempting_file_close
                 .set_action(CloseFileAction::NewFile);
-            // self.attempting_file_close = Some(Action::NewFile);
             return;
         }
 
@@ -263,5 +226,38 @@ impl App {
     /// Reset close action
     pub(super) fn reset_close_action(&mut self) {
         self.attempting_file_close.reset_attempt();
+    }
+}
+
+/// Print error to stderr and returns nice error message for user
+fn display_crypto_error(error: cocoon::Error) -> &'static str {
+    use cocoon::Error::*;
+
+    eprintln!("Error! {:#?}", error);
+
+    match error {
+        Cryptography => "Invalid password for file. This file is not accessible with this program",
+
+        UnrecognizedFormat => "Unrecognized file type or format",
+
+        TooLarge => {
+            "File too large to decrypt. This most likely means it was not encrypted properly"
+        }
+
+        TooShort => {
+            "File too short to decrypt. This most likely means it was not encrypted properly"
+        }
+
+        Io(error) => match error.kind() {
+            io::ErrorKind::InvalidData => {
+                "Invalid data. This most likely means it was not encrypted properly"
+            }
+
+            io::ErrorKind::PermissionDenied => "Permission denied",
+
+            // ... more IO errors can be handled here
+
+            _ => "Unknown file error! Please try again",
+        },
     }
 }
