@@ -17,7 +17,6 @@ impl eframe::App for App {
                 ConcurrentMessage::FinishConcurrentSave => {
                     println!("Save finished!");
                     self.file.force_set_saved();
-                    self.key_changed_since_save = false;
                     self.clear_error();
 
                     if self.attempting_file_close.is_attempting() {
@@ -32,31 +31,18 @@ impl eframe::App for App {
         // Whether the file is currently writing on a different thread
         let concurrently_writing = *self.writing.lock().unwrap();
 
-        // Whether the save action should be disabled
-        let disable_save_action = concurrently_writing
-            || (self.file.is_registered_and_saved() && !self.key_changed_since_save);
+        // // Whether each action is enabled (All disabled if writing)
+        // // Save: If file is unregistered, or unsaved
+        // let action_enabled_save = !concurrently_writing && !self.file.is_registered_and_saved();
+        // // Save as: No condition
+        // let action_enabled_save_as = !concurrently_writing;
+        // // Open: No condition
+        // let action_enabled_open = !concurrently_writing;
+        // // Open: If file is unregistered and not changed (blank new file already)
+        // let action_enabled_new =
+        //     !concurrently_writing && !self.file.is_unregistered_and_unchanged();
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Keybinds
-            // These mirror the ui buttons, but should be kept separate in code, as buttons can be disabled
-            if !concurrently_writing {
-                if keys!(ui: CTRL + S) {
-                    // Save
-                    if !disable_save_action {
-                        self.file_save_or_save_as(ctx);
-                    }
-                } else if keys!(ui: CTRL + SHIFT + S) {
-                    // Save as
-                    self.file_save_as(ctx);
-                } else if keys!(ui: CTRL + O) {
-                    // Open file
-                    self.file_open();
-                } else if keys!(ui: CTRL + N) {
-                    // New blank file
-                    self.file_new();
-                }
-            }
-
             ui.heading("Edit text files");
 
             ui.horizontal(|ui| {
@@ -79,58 +65,57 @@ impl eframe::App for App {
                     // File is unregistered
                     "No file open"
                 });
-            });
 
-            // Cryption key (password)
-            ui.horizontal(|ui| {
-                let label = ui.label("Password: ");
-
-                if ui.button("Change").clicked() {
-                    self.show_key_input_dialog = true;
-                }
-
-                if let Some(key) = &self.key {
-                    ui.monospace(key).labelled_by(label.id);
-                } else {
-                    ui.label("No password");
+                // Error message
+                if let Some(error) = *self.error.lock().unwrap() {
+                    ui.colored_label(Color32::RED, error);
                 }
             });
-
-            // Error message
-            if let Some(error) = *self.error.lock().unwrap() {
-                ui.colored_label(Color32::RED, error);
-            }
 
             // File actions
             ui.horizontal(|ui| {
-                // Save
-                if ui
-                    .add_enabled(!disable_save_action, egui::Button::new("Save"))
-                    .clicked()
-                {
+                /// Create new action, with button and keybind
+                macro_rules! action_button_and_keybind {
+                    (
+                        // Title of button
+                        $title: expr,
+                        // Keybind
+                        ($($keybind:tt)*),
+                        // Condition for button and keybind to be enabled
+                        if $condition: expr =>
+                        // Action to run
+                        $($action:tt)*
+                    ) => {{
+                        // Condition also requires that file is not writing on another thread
+                        let condition = $condition && !concurrently_writing;
+
+                        // Create button with title, that is only enabled if `condition` is true
+                        let button = ui.add_enabled(condition, egui::Button::new($title));
+
+                        // Create keybind, if condition is true
+                        // See `keys!` macro
+                        let keybind_active = (keys!(ui: $($keybind)*) && condition);
+
+                        // If button is clicked, or keybind is active, run condition
+                        if button.clicked() || keybind_active {
+                            $($action)*
+                        }
+                    }};
+                }
+
+                // Create actions from macro
+                action_button_and_keybind!( "Save", (CTRL + S), if !self.file.is_registered_and_saved() => {
                     self.file_save_or_save_as(ctx);
-                }
-                // Save as
-                if ui
-                    .add_enabled(!concurrently_writing, egui::Button::new("Save As"))
-                    .clicked()
-                {
+                });
+                action_button_and_keybind!( "Save As", (CTRL + SHIFT + S), if true => {
                     self.file_save_as(ctx);
-                }
-                // Open file
-                if ui
-                    .add_enabled(!concurrently_writing, egui::Button::new("Open"))
-                    .clicked()
-                {
+                });
+                action_button_and_keybind!( "Open", (CTRL + O), if true => {
                     self.file_open();
-                }
-                // New blank file
-                if ui
-                    .add_enabled(!concurrently_writing, egui::Button::new("New"))
-                    .clicked()
-                {
+                });
+                action_button_and_keybind!( "New", (CTRL + N), if !self.file.is_unregistered_and_unchanged() => {
                     self.file_new();
-                }
+                });
             });
 
             // Editable text of file contents
@@ -142,31 +127,6 @@ impl eframe::App for App {
         });
 
         // * Render popup windows
-
-        // User input key
-        if self.show_key_input_dialog {
-            dialog_window("Please enter password").show(ctx, |ui| {
-                ui.text_edit_singleline(&mut self.key_input);
-
-                ui.horizontal(|ui| {
-                    if ui.button("Cancel").clicked() {
-                        self.key_input = String::new();
-                        self.show_key_input_dialog = false;
-                    }
-
-                    if ui
-                        .add_enabled(!self.key_input.is_empty(), egui::Button::new("Set"))
-                        .clicked()
-                    {
-                        // ? Remove clone ?
-                        self.key = Some(self.key_input.clone());
-                        self.key_input = String::new();
-                        self.key_changed_since_save = true;
-                        self.show_key_input_dialog = false;
-                    }
-                });
-            });
-        }
 
         // Attempting to close file
         // Create custom window dialog if necessary

@@ -5,7 +5,7 @@ mod render;
 
 use std::sync::{Arc, Mutex};
 
-use crate::{Channel, File, Attempt};
+use crate::{Attempt, Channel, File};
 
 /// Possible messages between threads
 enum ConcurrentMessage {
@@ -21,20 +21,10 @@ enum CloseFileAction {
 }
 
 /// Main app state
-// #[derive(Default)]
+#[derive(Default)]
 pub struct App {
     /// Current file opened
     file: File,
-
-    /// Key for cryption
-    key: Option<String>,
-
-    /// Dialog should be shown to enter key
-    show_key_input_dialog: bool,
-    /// Temporary value of key input
-    key_input: String,
-    /// Whether key was changed since last file save
-    key_changed_since_save: bool,
 
     /// Whether file is currently writing
     writing: Arc<Mutex<bool>>,
@@ -52,29 +42,22 @@ pub struct App {
     error: Arc<Mutex<Option<&'static str>>>,
 }
 
-// @ debug
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            // file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
-            file:Default::default(),
-            
-            // key: "foo".to_string(),
-            key: Default::default(),
+// // @ debug
+// impl Default for App {
+//     fn default() -> Self {
+//         Self {
+//             // file: File::open_path_and_decrypt("/home/darcy/Documents/hello.enc", KEY).expect("Open initial file"),
+//             file:Default::default(),
 
-            show_key_input_dialog: Default::default(),
-            key_input: Default::default(),
-            key_changed_since_save: Default::default(),
+//             writing: Default::default(),
 
-            writing: Default::default(),
+//             attempting_file_close: Default::default(),
 
-            attempting_file_close: Default::default(),
+//             close_window_on_next_frame: Default::default(),
 
-            close_window_on_next_frame: Default::default(),
+//             channel: Default::default(),
 
-            channel: Default::default(),
-
-            error: Default::default(),
-        }
-    }
-}
+//             error: Default::default(),
+//         }
+//     }
+// }
