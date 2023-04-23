@@ -1,4 +1,4 @@
 # TODO
 
-1.  Check if file-open path matches current file path - do nothing
+1.  Add password input
 2.  Add popup for error message

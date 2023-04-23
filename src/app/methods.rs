@@ -6,6 +6,20 @@ use super::{App, CloseFileAction, ConcurrentMessage};
 use crate::{file::FileError, file_dialog, File};
 
 impl App {
+    /// Set error message
+    ///
+    /// This function can only be used in main thread
+    fn set_error(&mut self, error: &'static str) {
+        *self.error.lock().unwrap() = Some(error);
+    }
+
+    /// Remove error message
+    ///
+    /// This function can only be used in main thread
+    pub fn clear_error(&mut self) {
+        *self.error.lock().unwrap() = None;
+    }
+
     // * Save file (save, save as)
 
     /// Save existing file, or save as if not registered
@@ -47,6 +61,12 @@ impl App {
     fn file_save_existing(&mut self, path: &str, ctx: &egui::Context) {
         println!("Save existing");
 
+        // Get cryption key or return
+        let Some(key) = &self.key else {
+            self.set_error("Please enter a password");
+            return;
+        };
+
         // Set as writing
         *self.writing.lock().unwrap() = true;
         // Request to draw a new frame to update writing status
@@ -61,7 +81,7 @@ impl App {
 
         // path and key (both type String), and ctx (type Context) can be cloned with no troubles
         let path = path.to_owned();
-        let key = self.key.clone();
+        let key = key.clone();
         let ctx = ctx.clone();
 
         // These variables (types Sender<_> and Arc<Mutex<_>>) can be
@@ -102,12 +122,6 @@ impl App {
                 }
             }
 
-            // println!(
-            //     "      concurrent: Saved? {}",
-            //     file.is_registered_and_saved()
-            // );
-            // println!("      concurrent: Finish save");
-
             // Set as not writing
             *concurrent_write.lock().unwrap() = false;
             // Request to draw a new frame to update display of writing and save statuses
@@ -138,13 +152,26 @@ impl App {
             return;
         }
 
+        // Get cryption key or return
+        let Some(key) = &self.key else {
+            self.set_error("Please enter the password for the file you wish to open");
+            return;
+        };
+
         if let Some(path) = file_dialog()
             .pick_file()
             .map(|path_buf| path_buf.display().to_string())
         {
+            // Same file is already open
+            // Don't open again
+            if Some(&path) == self.file.path() {
+                println!("  Save file");
+                return;
+            }
+
             // This is a slow process, but should not use concurrent thread,
             //      as no user actions can be performed until file loads anyway
-            match File::open_path(path, &self.key) {
+            match File::open_path(path, key) {
                 // Successful read
                 Ok(file) => {
                     self.file = file;
@@ -156,7 +183,7 @@ impl App {
                     FileError::Cryption(err) => {
                         println!("cryption error: {:?}", err);
 
-                        let error_msg = Some(match err {
+                        self.set_error(match err {
                             cocoon::Error::Cryptography => "Invalid password",
                             cocoon::Error::UnrecognizedFormat => {
                                 "Invalid file: Unrecognized format"
@@ -166,12 +193,10 @@ impl App {
 
                             cocoon::Error::Io(err) => panic!("[io] {:?}", err),
                         });
-
-                        *self.error.lock().unwrap() = error_msg;
                     }
 
                     FileError::FromUtf8Error(_) => {
-                        *self.error.lock().unwrap() = Some("Invalid file: Not formatted as string")
+                        self.set_error("Invalid file: Not formatted as string")
                     }
 
                     FileError::Io(err) => panic!("[io] {:?}", err),

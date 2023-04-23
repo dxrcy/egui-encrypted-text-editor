@@ -27,7 +27,14 @@ pub struct App {
     file: File,
 
     /// Key for cryption
-    key: String,
+    key: Option<String>,
+
+    /// Dialog should be shown to enter key
+    show_key_input_dialog: bool,
+    /// Temporary value of key input
+    key_input: String,
+    /// Whether key was changed since last file save
+    key_changed_since_save: bool,
 
     /// Whether file is currently writing
     writing: Arc<Mutex<bool>>,
@@ -52,7 +59,12 @@ impl Default for App {
             // file: File::open_path("/home/darcy/Documents/hello.txt").expect("Open initial file"),
             file:Default::default(),
             
-            key: "foo".to_string(),
+            // key: "foo".to_string(),
+            key: Default::default(),
+
+            show_key_input_dialog: Default::default(),
+            key_input: Default::default(),
+            key_changed_since_save: Default::default(),
 
             writing: Default::default(),
 

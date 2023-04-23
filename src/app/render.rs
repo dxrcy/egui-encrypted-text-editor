@@ -17,6 +17,8 @@ impl eframe::App for App {
                 ConcurrentMessage::FinishConcurrentSave => {
                     println!("Save finished!");
                     self.file.force_set_saved();
+                    self.key_changed_since_save = false;
+                    self.clear_error();
 
                     if self.attempting_file_close.is_attempting() {
                         self.call_close_action();
@@ -31,7 +33,8 @@ impl eframe::App for App {
         let concurrently_writing = *self.writing.lock().unwrap();
 
         // Whether the save action should be disabled
-        let disable_save_action = concurrently_writing || self.file.is_registered_and_saved();
+        let disable_save_action = concurrently_writing
+            || (self.file.is_registered_and_saved() && !self.key_changed_since_save);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Keybinds
@@ -81,7 +84,16 @@ impl eframe::App for App {
             // Cryption key (password)
             ui.horizontal(|ui| {
                 let label = ui.label("Password: ");
-                ui.monospace(&self.key).labelled_by(label.id);
+
+                if ui.button("Change").clicked() {
+                    self.show_key_input_dialog = true;
+                }
+
+                if let Some(key) = &self.key {
+                    ui.monospace(key).labelled_by(label.id);
+                } else {
+                    ui.label("No password");
+                }
             });
 
             // Error message
@@ -131,6 +143,31 @@ impl eframe::App for App {
 
         // * Render popup windows
 
+        // User input key
+        if self.show_key_input_dialog {
+            dialog_window("Please enter password").show(ctx, |ui| {
+                ui.text_edit_singleline(&mut self.key_input);
+
+                ui.horizontal(|ui| {
+                    if ui.button("Cancel").clicked() {
+                        self.key_input = String::new();
+                        self.show_key_input_dialog = false;
+                    }
+
+                    if ui
+                        .add_enabled(!self.key_input.is_empty(), egui::Button::new("Set"))
+                        .clicked()
+                    {
+                        // ? Remove clone ?
+                        self.key = Some(self.key_input.clone());
+                        self.key_input = String::new();
+                        self.key_changed_since_save = true;
+                        self.show_key_input_dialog = false;
+                    }
+                });
+            });
+        }
+
         // Attempting to close file
         // Create custom window dialog if necessary
         if self.attempting_file_close.is_attempting() {
@@ -140,7 +177,7 @@ impl eframe::App for App {
                 //      because it would only ever need to be closed while the file is writing
                 //      if the program has frozen, and in that case it can be closed with task manager
                 dialog_window("Waiting for file to save...").show(ctx, |ui| {
-                    ui.label("File may corrupt if not saved properly.")
+                    ui.label("File may corrupt if not saved properly.");
                 });
             } else if !self.file.is_registered_and_saved() {
                 // Closing unsaved file
